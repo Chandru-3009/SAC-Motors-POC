@@ -20,6 +20,9 @@ function App() {
   const [timeSlots, setTimeSlots] = useState([]);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
   const [conversationData, setConversationData] = useState({});
+  const [language, setLanguage] = useState(() => localStorage.getItem('sac_lang') || '');
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [pendingConnect, setPendingConnect] = useState(false);
 
   const realtimeServiceRef = useRef(null);
 
@@ -40,6 +43,8 @@ function App() {
       service.disconnect();
     };
   }, []);
+
+  // No auto-open language modal on load; we open it when user clicks Start
 
   const handleNewMessage = (message) => {
     setMessages(prev => [...prev, message]);
@@ -332,6 +337,13 @@ function App() {
 
   const handleConnect = async () => {
     try {
+      // Decide solely based on persistent storage so clearing storage forces dialog
+      const storedLang = localStorage.getItem('sac_lang');
+      if (!storedLang) {
+        setPendingConnect(true);
+        setShowLanguageModal(true);
+        return;
+      }
       // Try proxy first, fallback to direct connection
       const apiUrl = '/api/session/create';
       const fallbackUrl = 'http://localhost:3000/api/session/create';
@@ -340,7 +352,8 @@ function App() {
       try {
         response = await fetch(apiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: storedLang || 'en' })
         });
         
         if (!response.ok) {
@@ -350,7 +363,8 @@ function App() {
         console.log('Proxy connection failed, trying direct connection...');
         response = await fetch(fallbackUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: storedLang || 'en' })
         });
       }
 
@@ -373,6 +387,9 @@ function App() {
 
       await realtimeServiceRef.current.connect(clientSecret);
       setIsConnected(true);
+
+      // Set language attribute but keep UI in LTR direction
+      document.documentElement.lang = storedLang || 'en';
 
       // AI will automatically greet and start the conversation via voice and text
       console.log('🤖 Connected - AI will greet automatically...');
@@ -406,6 +423,13 @@ function App() {
     setShowTimePicker(false);
     setLocationData(null);
     setTimeSlots([]);
+
+    // Reset language so user selects again on next start
+    localStorage.removeItem('sac_lang');
+    setLanguage('');
+    setShowLanguageModal(false);
+    setPendingConnect(false);
+    document.documentElement.lang = 'en';
   };
 
   const toggleRecording = () => {
@@ -479,6 +503,47 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      {/* Language Selection Modal */}
+      {showLanguageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-gray-800 mb-2 tracking-tight">Choose your language</h3>
+            <p className="text-sm text-gray-600 mb-6">اختر لغتك المفضلة</p>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => {
+                  localStorage.setItem('sac_lang', 'en');
+                  setLanguage('en');
+                  setShowLanguageModal(false);
+                  if (pendingConnect) {
+                    setPendingConnect(false);
+                    // proceed to connect now that language is set
+                    handleConnect();
+                  }
+                }}
+                className="bg-gray-900 text-white rounded-xl py-3 font-semibold hover:bg-gray-800 transition-all"
+              >
+                English
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.setItem('sac_lang', 'ar');
+                  setLanguage('ar');
+                  setShowLanguageModal(false);
+                  if (pendingConnect) {
+                    setPendingConnect(false);
+                    handleConnect();
+                  }
+                }}
+                className="bg-gradient-to-r from-sac-red to-red-600 text-white rounded-xl py-3 font-semibold hover:from-red-600 hover:to-red-700 transition-all"
+              >
+                العربية
+              </button>
+            </div>
+            <div className="text-xs text-gray-500 mt-4">You can change later by clearing browser storage.</div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="bg-gradient-to-r from-gray-900 to-gray-800 backdrop-blur-sm border-b border-gray-700/50 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
