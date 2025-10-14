@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { User, Bot } from 'lucide-react';
+import { User, Bot, Car, Wrench } from 'lucide-react';
 
 export default function ConversationDisplay({ messages, isAISpeaking }) {
   const messagesEndRef = useRef(null);
@@ -17,7 +17,7 @@ export default function ConversationDisplay({ messages, isAISpeaking }) {
       <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-sac-red">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sac-red to-red-600 flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-lg">F</span>
+            <Wrench className="w-5 h-5 text-white" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-sac-navy">Fahad - Service Engineer</h2>
@@ -40,7 +40,7 @@ export default function ConversationDisplay({ messages, isAISpeaking }) {
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 mt-20">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-sac-red to-red-600 flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-2xl">F</span>
+              <Car className="w-8 h-8 text-white" />
             </div>
             <p className="text-lg font-medium">Fahad is ready to help you!</p>
             <p className="text-sm mt-2">Click "Start Conversation" to begin your service consultation</p>
@@ -60,13 +60,13 @@ export default function ConversationDisplay({ messages, isAISpeaking }) {
                   className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
                     message.role === 'user'
                       ? 'bg-gray-300'
-                      : 'bg-sac-red shadow-lg'
+                      : 'bg-gradient-to-br from-sac-red to-red-600 shadow-lg'
                   }`}
                 >
                   {message.role === 'user' ? (
                     <User className="w-5 h-5 text-gray-700" />
                   ) : (
-                    <Bot className="w-5 h-5 text-white" />
+                    <Wrench className="w-5 h-5 text-white" />
                   )}
                 </div>
 
@@ -111,8 +111,8 @@ export default function ConversationDisplay({ messages, isAISpeaking }) {
         {isAISpeaking && (
           <div className="flex justify-start">
             <div className="flex items-start space-x-2">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-sac-red shadow-lg">
-                <Bot className="w-5 h-5 text-white" />
+              <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-sac-red to-red-600 shadow-lg">
+                <Wrench className="w-5 h-5 text-white" />
               </div>
               <div className="bg-sac-navy text-white rounded-lg px-4 py-3 message-shadow message-bubble">
                 <div className="flex space-x-1">
