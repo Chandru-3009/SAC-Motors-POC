@@ -6,7 +6,8 @@ const router = express.Router();
 // Create a new realtime session
 router.post('/create', async (req, res) => {
   try {
-    const sessionData = await createSession();
+    const { language } = req.body || {};
+    const sessionData = await createSession(language);
     res.json(sessionData);
   } catch (error) {
     console.error('Error creating session:', error);
