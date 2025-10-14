@@ -20,6 +20,7 @@ export class RealtimeService {
     this.isConnected = false;
     this.isMuted = false;
     this.initialGreetingTriggered = false; // Track if we've triggered the initial AI greeting
+    this.audioHealthCheckInterval = null; // For periodic audio health checks
   }
 
   /**
@@ -30,14 +31,42 @@ export class RealtimeService {
       // Create RTCPeerConnection
       this.pc = new RTCPeerConnection();
 
-      // Set up audio output element
+      // Set up audio output element with better configuration
       this.audioElement = document.createElement('audio');
       this.audioElement.autoplay = true;
+      this.audioElement.preload = 'auto';
+      this.audioElement.crossOrigin = 'anonymous';
+      this.audioElement.volume = 1.0;
       document.body.appendChild(this.audioElement);
       
       this.pc.ontrack = async (e) => {
         console.log('🎵 Audio track received');
-        this.audioElement.srcObject = e.streams[0];
+        
+        // Handle multiple audio tracks if present
+        const audioStream = e.streams.find(stream => 
+          stream.getAudioTracks().length > 0
+        ) || e.streams[0];
+        
+        this.audioElement.srcObject = audioStream;
+        
+        // Add event listeners for better audio management
+        this.audioElement.addEventListener('ended', () => {
+          console.log('🔚 Audio playback ended');
+          this.callbacks.onAudioEnd();
+        });
+        
+        this.audioElement.addEventListener('pause', () => {
+          console.log('⏸️ Audio playback paused');
+        });
+        
+        this.audioElement.addEventListener('play', () => {
+          console.log('▶️ Audio playback started');
+          this.callbacks.onAudioStart();
+        });
+        
+        this.audioElement.addEventListener('error', (error) => {
+          console.error('❌ Audio playback error:', error);
+        });
         
         // Explicitly play the audio (required for some browsers)
         try {
@@ -97,6 +126,9 @@ export class RealtimeService {
       this.isConnected = true;
       this.callbacks.onConnected();
 
+      // Start audio health checks
+      this.startAudioHealthChecks();
+
       console.log('✅ Connected to OpenAI Realtime API via WebRTC');
     } catch (error) {
       console.error('Connection error:', error);
@@ -119,6 +151,17 @@ export class RealtimeService {
 
         case 'response.audio.done':
           this.callbacks.onAudioEnd();
+          break;
+
+        case 'output_audio_buffer.stopped':
+          console.log('⚠️ Audio buffer stopped unexpectedly');
+          // Try to recover audio playback
+          this.recoverAudioPlayback();
+          break;
+
+        case 'output_audio_buffer.playing':
+          console.log('🎵 Audio buffer playing');
+          this.callbacks.onAudioStart();
           break;
 
         case 'response.audio_transcript.delta':
@@ -348,9 +391,78 @@ export class RealtimeService {
   }
 
   /**
+   * Force audio playback recovery
+   */
+  async recoverAudioPlayback() {
+    if (this.audioElement && this.audioElement.paused) {
+      try {
+        console.log('🔄 Attempting audio playback recovery...');
+        await this.audioElement.play();
+        console.log('✅ Audio playback recovered');
+        return true;
+      } catch (error) {
+        console.warn('❌ Audio recovery failed:', error);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Check and ensure audio is playing
+   */
+  ensureAudioPlaying() {
+    if (this.audioElement && !this.isMuted) {
+      if (this.audioElement.paused) {
+        console.log('🔄 Audio was paused, attempting to resume...');
+        this.recoverAudioPlayback();
+      }
+    }
+  }
+
+  /**
+   * Start periodic audio health checks
+   */
+  startAudioHealthChecks() {
+    if (this.audioHealthCheckInterval) {
+      clearInterval(this.audioHealthCheckInterval);
+    }
+
+    // Check audio health every 2 seconds
+    this.audioHealthCheckInterval = setInterval(() => {
+      if (this.isConnected && this.audioElement) {
+        // Check if audio is stuck or paused unexpectedly
+        if (!this.audioElement.paused && this.audioElement.currentTime > 0) {
+          // Audio is playing normally
+          return;
+        }
+        
+        // Audio might be stuck - try to recover
+        if (!this.isMuted && this.audioElement.paused) {
+          console.log('🔍 Audio health check: Audio was paused unexpectedly');
+          this.recoverAudioPlayback();
+        }
+      }
+    }, 2000);
+  }
+
+  /**
+   * Stop audio health checks
+   */
+  stopAudioHealthChecks() {
+    if (this.audioHealthCheckInterval) {
+      clearInterval(this.audioHealthCheckInterval);
+      this.audioHealthCheckInterval = null;
+    }
+  }
+
+  /**
    * Disconnect from the session
    */
   disconnect() {
+    // Stop audio health checks
+    this.stopAudioHealthChecks();
+
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => track.stop());
     }
