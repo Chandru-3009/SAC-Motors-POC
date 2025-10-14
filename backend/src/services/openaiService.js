@@ -99,18 +99,91 @@ const VEHICLE_COST_DATA = {
 /**
  * Create a new OpenAI Realtime session with ephemeral token
  */
-export async function createSession() {
+export async function createSession(language = 'en') {
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not configured');
   }
 
   const sessionId = uuidv4();
 
-  // Configuration for Fahad - SAC Motors AI Service Engineer
-  const sessionConfig = {
-    model: 'gpt-4o-realtime-preview-2024-12-17',
-    voice: 'echo',
-    instructions: `You are Fahad, SAC Motors Service Engineer. Be warm, caring, and use light Arabic phrases.
+  console.log(`🌍 Creating session with language: ${language}`);
+
+  // Get language-specific instructions
+  const getInstructions = (lang) => {
+    if (lang === 'ar') {
+      return `أنت فهد، مهندس خدمة SAC Motors. كن دافئاً ومهتماً واستخدم عبارات عربية خفيفة.
+
+التحية: السلام عليكم 👋 مرحباً بك في SAC Motors! أنا فهد، مساعد الخدمة الخاص بك. كيف يمكنني مساعدتك اليوم - هل تحتاج إصلاح حادث أم خدمة عامة؟
+
+تدفق المحادثة (اسأل سؤالاً واحداً في كل مرة، اجعل الردود أقل من 80 حرفاً):
+1. التحية
+2. "هل يمكنني الحصول على اسمك الكامل، من فضلك؟"
+3. "شكراً، السيد [الاسم]! هل يمكنك مشاركة بريدك الإلكتروني؟"
+4. "ممتاز! ورقم هاتفك المحمول؟"
+5. "أي سيارة تقود؟"
+6. "فهمت! ما هو الموديل؟"
+7. "والسنة؟"
+8. "أين الضرر في سيارتك؟"
+9. "هل يمكنك رفع صورة للضرر؟" - استخدم دالة trigger_image_upload
+10. بعد رفع الصورة: استخدم دالة generate_cost_estimation
+11. انتظر رد المستخدم، ثم "هل لا تزال تستطيع قيادتها؟"
+12. "هل تظهر أي أضواء تحذيرية؟"
+13. "هل انفتحت الوسائد الهوائية؟"
+14. "هل ستقدم مطالبة تأمين؟"
+15. "في أي مدينة أنت؟ الرياض، جدة، أم الدمام؟"
+16. "أي تاريخ يناسبك؟"
+17. "صباحاً، بعد الظهر، أم مساءً؟"
+18. "هل تفضل واتساب أم البريد الإلكتروني؟"
+19. استخدم دالة check_appointment_availability
+20. "كل شيء جاهز! شكراً جزيلاً لك! 🙏"
+
+بيانات التكلفة (ريال سعودي - قطع غيار+عمالة، طلاء منفصل):
+تويوتا كامري 2021:
+- المصد: 1200+400، الواجهة: 950+300، الغطاء: 1800+500، المصباح: 850+200، الباب: 1200+350، طلاء: 300/لوحة
+
+هوندا أكورد 2020:
+- المصد: 1000+350، الواجهة: 900+280، الغطاء: 1700+450، المصباح: 800+180، الباب: 1100+320، طلاء: 280/لوحة
+
+بي إم دبليو 3 سيريز 2022:
+- المصد: 1800+600، الواجهة: 1500+450، الغطاء: 2500+700، المصباح: 1200+300، الباب: 1800+500، طلاء: 450/لوحة
+
+نيسان ألتيما 2021:
+- المصد: 1100+380، الواجهة: 950+290، الغطاء: 1600+480، المصباح: 750+190، الباب: 1150+340، طلاء: 290/لوحة
+
+تحليل الضرر:
+عندما يرفع المستخدم صورة:
+1. استخدم دالة generate_cost_estimation
+2. احصل على تفصيل التكلفة
+3. قل: "التقدير هو [X] ريال"
+4. انتظر الرد
+5. ثم اسأل: "هل لا تزال تستطيع قيادتها؟"
+
+سير عمل التكلفة:
+- حلل الصورة والضرر
+- احسب القطع + العمالة + الطلاء
+- اعرض التفصيل
+- أعط التقدير الإجمالي
+
+مواعيد المواعيد:
+الاثنين-الجمعة: صباح/بعد الظهر/مساء
+السبت: صباح/بعد الظهر فقط
+الأحد: مغلق
+
+الحجز:
+1. اسأل عن التاريخ
+2. تحقق من التوفر
+3. أكد أو اقترح بديل
+
+كن دافئاً ومفيداً. اجعل الأمر بسيطاً!
+
+القواعد:
+- سؤال واحد في كل مرة
+- انتظر الرد
+- اجعل أقل من 80 حرفاً
+- لا تستخدم "أم" في الأسئلة
+- كن ودوداً كصديق`;
+    } else {
+      return `You are Fahad, SAC Motors Service Engineer. Be warm, caring, and use light Arabic phrases.
 
 GREETING: Assalamu Alaikum 👋 Welcome to SAC Motors! I’m Fahad, your service assistant. How can I help you today — do you need accident repair or a general service?"
 
@@ -129,9 +202,9 @@ CONVERSATION FLOW (ask ONE question at a time, keep responses under 80 character
 12. "Any warning lights showing?"
 13. "Did the airbags deploy?"
 14. "Will you be making an insurance claim?"
-15. "Which city are you in? Riyadh, Jeddah, or Dammam?"
-16. "What date works best for you?"
-17. "Morning, afternoon, or evening?"
+15. "We have service locations in Riyadh, Jeddah, or Dammam. Which suits you?"
+16. "What date works for you? For example, October 15th?"
+17. "Which time slot works better - Morning, Afternoon, or Evening?"
 18. "Do you prefer WhatsApp or Email?"
 19. Use check_appointment_availability function
 20. "All set! Thank you so much! 🙏"
@@ -180,20 +253,31 @@ RULES:
 - Wait for response
 - Keep under 80 characters
 - No "or" in questions
-- Be friendly like a friend`,
+- Be friendly like a friend`;
+    }
+  };
+
+  // Configuration for Fahad - SAC Motors AI Service Engineer
+  const instructions = getInstructions(language);
+  console.log(`📝 Using ${language === 'ar' ? 'Arabic' : 'English'} instructions for session ${sessionId}`);
+  
+  const sessionConfig = {
+    model: 'gpt-4o-realtime-preview-2024-12-17',
+    voice: 'echo',
+    instructions: instructions,
     modalities: ['text', 'audio'],
     temperature: 0.8,
     tools: [
       {
         type: 'function',
         name: 'trigger_image_upload',
-        description: 'Ask user to upload damage photos',
+        description: language === 'ar' ? 'اطلب من المستخدم رفع صور الأضرار' : 'Ask user to upload damage photos',
         parameters: {
           type: 'object',
           properties: {
             message: {
               type: 'string',
-              description: 'Friendly message'
+              description: language === 'ar' ? 'رسالة ودية' : 'Friendly message'
             }
           },
           required: ['message']
@@ -202,14 +286,14 @@ RULES:
       {
         type: 'function',
         name: 'trigger_location_selector',
-        description: 'Ask user to choose city',
+        description: language === 'ar' ? 'اطلب من المستخدم اختيار المدينة' : 'Ask user to choose city',
         parameters: {
           type: 'object',
           properties: {
             cities: {
               type: 'array',
               items: { type: 'string' },
-              description: 'Cities'
+              description: language === 'ar' ? 'المدن' : 'Cities'
             }
           },
           required: ['cities']
@@ -218,14 +302,14 @@ RULES:
       {
         type: 'function',
         name: 'trigger_time_picker',
-        description: 'Ask user to choose time slot',
+        description: language === 'ar' ? 'اطلب من المستخدم اختيار الفترة الزمنية' : 'Ask user to choose time slot',
         parameters: {
           type: 'object',
           properties: {
             slots: {
               type: 'array',
               items: { type: 'string' },
-              description: 'Time slots'
+              description: language === 'ar' ? 'الفترات الزمنية' : 'Time slots'
             }
           },
           required: ['slots']
@@ -234,7 +318,7 @@ RULES:
       {
         type: 'function',
         name: 'save_customer_data',
-        description: 'Save customer details',
+        description: language === 'ar' ? 'حفظ تفاصيل العميل' : 'Save customer details',
         parameters: {
           type: 'object',
           properties: {
@@ -260,15 +344,15 @@ RULES:
        {
          type: 'function',
         name: 'generate_cost_estimation',
-        description: 'Calculate repair costs',
+        description: language === 'ar' ? 'حساب تكاليف الإصلاح' : 'Calculate repair costs',
          parameters: {
            type: 'object',
            properties: {
-             vehicleMake: { type: 'string', description: 'Car brand' },
-             vehicleModel: { type: 'string', description: 'Car model' },
-             vehicleYear: { type: 'string', description: 'Year' },
-             damageDescription: { type: 'string', description: 'Damage details' },
-             imageUrl: { type: 'string', description: 'Image URL' }
+             vehicleMake: { type: 'string', description: language === 'ar' ? 'ماركة السيارة' : 'Car brand' },
+             vehicleModel: { type: 'string', description: language === 'ar' ? 'موديل السيارة' : 'Car model' },
+             vehicleYear: { type: 'string', description: language === 'ar' ? 'السنة' : 'Year' },
+             damageDescription: { type: 'string', description: language === 'ar' ? 'تفاصيل الضرر' : 'Damage details' },
+             imageUrl: { type: 'string', description: language === 'ar' ? 'رابط الصورة' : 'Image URL' }
            },
            required: ['vehicleMake', 'vehicleModel', 'vehicleYear', 'damageDescription']
          }
@@ -276,15 +360,15 @@ RULES:
        {
          type: 'function',
         name: 'check_appointment_availability',
-        description: 'Book appointment',
+        description: language === 'ar' ? 'حجز موعد' : 'Book appointment',
          parameters: {
            type: 'object',
            properties: {
-             date: { type: 'string', description: 'Appointment date' },
-             day: { type: 'string', description: 'Day of week' },
-             timeSlot: { type: 'string', description: 'Time slot' },
-             city: { type: 'string', description: 'City' },
-             contactMethod: { type: 'string', description: 'Contact method' }
+             date: { type: 'string', description: language === 'ar' ? 'تاريخ الموعد' : 'Appointment date' },
+             day: { type: 'string', description: language === 'ar' ? 'يوم الأسبوع' : 'Day of week' },
+             timeSlot: { type: 'string', description: language === 'ar' ? 'الفترة الزمنية' : 'Time slot' },
+             city: { type: 'string', description: language === 'ar' ? 'المدينة' : 'City' },
+             contactMethod: { type: 'string', description: language === 'ar' ? 'طريقة التواصل' : 'Contact method' }
            },
            required: ['date', 'day', 'timeSlot', 'city', 'contactMethod']
          }
@@ -313,6 +397,7 @@ RULES:
     dataStore.set(sessionId, {
       id: sessionId,
       clientSecret: data.client_secret,
+      language: language,
       createdAt: new Date().toISOString(),
       conversationData: {}
     });
