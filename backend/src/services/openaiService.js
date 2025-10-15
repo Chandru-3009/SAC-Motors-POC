@@ -447,3 +447,10 @@ export async function getSessionData(sessionId) {
   return session;
 }
 
+
+/**
+ * Get session list
+ */
+export async function getSessions() {
+  return dataStore.store;
+}

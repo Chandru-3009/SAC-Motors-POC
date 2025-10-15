@@ -1,5 +1,5 @@
 import express from 'express';
-import { createSession, saveSessionData, getSessionData } from '../services/openaiService.js';
+import { createSession, saveSessionData, getSessionData, getSessions } from '../services/openaiService.js';
 
 const router = express.Router();
 
@@ -45,6 +45,20 @@ router.get('/:sessionId', async (req, res) => {
       error: 'Failed to retrieve data',
       message: error.message 
     });
+  }
+});
+
+// Get session list
+router.get('/list', async (req, res) => {
+  try {
+    const sessionList = await getSessions();
+    res.json({
+      success: true,
+      sessionList: sessionList
+    });
+  } catch (error) {
+    console.error('Error retrieving session list:', error);
+    res.status(500).json({ error: 'Failed to retrieve session list', message: error.message });
   }
 });
 
