@@ -1,5 +1,6 @@
 import express from 'express';
 import { createSession, saveSessionData, getSessionData } from '../services/openaiService.js';
+import { generateCostEstimation } from '../services/costEstimationService.js';
 
 const router = express.Router();
 
@@ -43,6 +44,39 @@ router.get('/:sessionId', async (req, res) => {
     console.error('Error retrieving session data:', error);
     res.status(500).json({ 
       error: 'Failed to retrieve data',
+      message: error.message 
+    });
+  }
+});
+
+// Generate cost estimation
+router.post('/cost-estimation', async (req, res) => {
+  try {
+    const { vehicleMake, vehicleModel, vehicleYear, damageDescription, imageUrl } = req.body;
+    
+    if (!vehicleMake || !vehicleModel || !vehicleYear || !damageDescription) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters',
+        message: 'vehicleMake, vehicleModel, vehicleYear, and damageDescription are required' 
+      });
+    }
+
+    const costEstimation = await generateCostEstimation({
+      vehicleMake,
+      vehicleModel,
+      vehicleYear,
+      damageDescription,
+      imageUrl
+    });
+
+    res.json({
+      success: true,
+      costEstimation
+    });
+  } catch (error) {
+    console.error('Error generating cost estimation:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate cost estimation',
       message: error.message 
     });
   }

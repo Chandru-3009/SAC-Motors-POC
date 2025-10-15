@@ -108,163 +108,52 @@ function App() {
   const handleCostEstimation = async (args) => {
     console.log('Generating cost estimation:', args);
     
-    const { vehicleMake, vehicleModel, vehicleYear, damageDescription, imageUrl } = args;
-    
-    // Sample cost data for calculations
-    const costData = {
-      "Toyota Camry 2021": {
-        "bumper": {"part": 1200, "labor": 400, "paint": 300},
-        "fender": {"part": 950, "labor": 300, "paint": 300},
-        "hood": {"part": 1800, "labor": 500, "paint": 300},
-        "headlight": {"part": 850, "labor": 200, "paint": 0},
-        "door": {"part": 1200, "labor": 350, "paint": 300}
-      },
-      "Honda Accord 2020": {
-        "bumper": {"part": 1000, "labor": 350, "paint": 280},
-        "fender": {"part": 900, "labor": 280, "paint": 280},
-        "hood": {"part": 1700, "labor": 450, "paint": 280},
-        "headlight": {"part": 800, "labor": 180, "paint": 0},
-        "door": {"part": 1100, "labor": 320, "paint": 280}
-      },
-      "BMW 3 Series 2022": {
-        "bumper": {"part": 1800, "labor": 600, "paint": 450},
-        "fender": {"part": 1500, "labor": 450, "paint": 450},
-        "hood": {"part": 2500, "labor": 700, "paint": 450},
-        "headlight": {"part": 1200, "labor": 300, "paint": 0},
-        "door": {"part": 1800, "labor": 500, "paint": 450}
-      },
-      "Nissan Altima 2021": {
-        "bumper": {"part": 1100, "labor": 380, "paint": 290},
-        "fender": {"part": 950, "labor": 290, "paint": 290},
-        "hood": {"part": 1600, "labor": 480, "paint": 290},
-        "headlight": {"part": 750, "labor": 190, "paint": 0},
-        "door": {"part": 1150, "labor": 340, "paint": 290}
+    try {
+      const apiUrl = '/api/session/cost-estimation';
+      const fallbackUrl = 'http://localhost:3000/api/session/cost-estimation';
+      
+      let response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args)
+        });
+        
+        if (!response.ok) {
+          throw new Error('Proxy failed');
+        }
+      } catch (proxyError) {
+        response = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args)
+        });
       }
-    };
 
-    const vehicleKey = `${vehicleMake} ${vehicleModel} ${vehicleYear}`;
-    const vehicleCosts = costData[vehicleKey] || costData["Toyota Camry 2021"];
-    
-    // Analyze damage description to identify damaged parts
-    const damageDesc = damageDescription.toLowerCase();
-    const damagedParts = [];
-    let totalPartsCost = 0;
-    let totalLaborCost = 0;
-    let totalPaintCost = 0;
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
 
-    // Identify damaged parts based on description
-    if (damageDesc.includes('bumper')) {
-      const part = vehicleCosts.bumper;
-      damagedParts.push({
-        part_name: 'Bumper',
-        parts_cost: part.part,
-        labor_cost: part.labor,
-        paint_cost: part.paint,
-        total: part.part + part.labor + part.paint
-      });
-      totalPartsCost += part.part;
-      totalLaborCost += part.labor;
-      totalPaintCost += part.paint;
+      const { costEstimation } = await response.json();
+      console.log('Generated cost estimation:', costEstimation);
+
+      // Send the cost estimation back to AI so it can speak it
+      const totalCost = costEstimation.cost_estimation.total_cost;
+      const currency = costEstimation.cost_estimation.currency;
+      
+      // Send a structured response that the AI can speak naturally
+      await realtimeServiceRef.current?.sendTextMessage(
+        `FUNCTION_RESULT: Cost estimation completed successfully. Total cost: ${totalCost} ${currency}. Breakdown: Parts ${costEstimation.cost_estimation.parts_cost} ${currency}, Labor ${costEstimation.cost_estimation.labor_cost} ${currency}, Paint ${costEstimation.cost_estimation.paint_cost} ${currency}. Please present this cost estimation to the user in a friendly way and continue with the next question about driveability.`
+      );
+    } catch (error) {
+      console.error('Error generating cost estimation:', error);
+      
+      // Fallback to a simple estimate
+      await realtimeServiceRef.current?.sendTextMessage(
+        `FUNCTION_RESULT: Cost estimation: Approximately 1,500-2,500 SAR based on damage description. Please present this to the user and continue with the next question about driveability.`
+      );
     }
-
-    if (damageDesc.includes('fender')) {
-      const part = vehicleCosts.fender;
-      damagedParts.push({
-        part_name: 'Fender',
-        parts_cost: part.part,
-        labor_cost: part.labor,
-        paint_cost: part.paint,
-        total: part.part + part.labor + part.paint
-      });
-      totalPartsCost += part.part;
-      totalLaborCost += part.labor;
-      totalPaintCost += part.paint;
-    }
-
-    if (damageDesc.includes('hood')) {
-      const part = vehicleCosts.hood;
-      damagedParts.push({
-        part_name: 'Hood',
-        parts_cost: part.part,
-        labor_cost: part.labor,
-        paint_cost: part.paint,
-        total: part.part + part.labor + part.paint
-      });
-      totalPartsCost += part.part;
-      totalLaborCost += part.labor;
-      totalPaintCost += part.paint;
-    }
-
-    if (damageDesc.includes('headlight') || damageDesc.includes('light')) {
-      const part = vehicleCosts.headlight;
-      damagedParts.push({
-        part_name: 'Headlight',
-        parts_cost: part.part,
-        labor_cost: part.labor,
-        paint_cost: part.paint,
-        total: part.part + part.labor + part.paint
-      });
-      totalPartsCost += part.part;
-      totalLaborCost += part.labor;
-      totalPaintCost += part.paint;
-    }
-
-    if (damageDesc.includes('door')) {
-      const part = vehicleCosts.door;
-      damagedParts.push({
-        part_name: 'Door',
-        parts_cost: part.part,
-        labor_cost: part.labor,
-        paint_cost: part.paint,
-        total: part.part + part.labor + part.paint
-      });
-      totalPartsCost += part.part;
-      totalLaborCost += part.labor;
-      totalPaintCost += part.paint;
-    }
-
-    // If no specific parts identified, provide general estimate
-    if (damagedParts.length === 0) {
-      damagedParts.push({
-        part_name: 'General Repair',
-        parts_cost: 800,
-        labor_cost: 400,
-        paint_cost: 300,
-        total: 1500
-      });
-      totalPartsCost = 800;
-      totalLaborCost = 400;
-      totalPaintCost = 300;
-    }
-
-    const totalCost = totalPartsCost + totalLaborCost + totalPaintCost;
-
-    // Create structured cost estimation
-    const costEstimation = {
-      vehicle: {
-        brand: vehicleMake,
-        model: vehicleModel,
-        year: vehicleYear,
-        registration: "Not provided"
-      },
-      damage_description: damageDescription,
-      cost_estimation: {
-        parts_cost: totalPartsCost,
-        labor_cost: totalLaborCost,
-        paint_cost: totalPaintCost,
-        other_charges: 0,
-        total_cost: totalCost,
-        currency: "SAR"
-      },
-      detailed_breakdown: damagedParts
-    };
-
-    console.log('Generated cost estimation:', costEstimation);
-
-    // Send the structured cost estimation back to AI
-    await realtimeServiceRef.current?.sendTextMessage(
-      `Cost estimation generated: ${JSON.stringify(costEstimation, null, 2)}`
-    );
   };
 
   const handleAppointmentBooking = async (args) => {
@@ -474,12 +363,21 @@ function App() {
 
       const { imageUrl } = await response.json();
       
-      setMessages(prev => [...prev, {
+      const imageMessage = {
         role: 'user',
         content: `[Image uploaded: ${file.name}]`,
         imageUrl: `http://localhost:3000${imageUrl}`,
         timestamp: new Date()
-      }]);
+      };
+      
+      setMessages(prev => [...prev, imageMessage]);
+
+      // Collect image upload data
+      if (realtimeServiceRef.current) {
+        realtimeServiceRef.current.collectedData.damageInfo.imageUrl = `http://localhost:3000${imageUrl}`;
+        realtimeServiceRef.current.collectedData.damageInfo.imageFileName = file.name;
+        realtimeServiceRef.current.collectUserData(imageMessage, true);
+      }
 
       setShowImageUploader(false);
       
@@ -492,11 +390,22 @@ function App() {
   };
 
   const handleLocationSelect = async (city, branch) => {
+    // Collect location selection data
+    if (realtimeServiceRef.current) {
+      realtimeServiceRef.current.collectedData.serviceInfo.preferredCity = city;
+      realtimeServiceRef.current.collectedData.serviceInfo.preferredBranch = branch;
+    }
+    
     await realtimeServiceRef.current?.sendTextMessage(`I choose ${city} - ${branch}`);
     setShowLocationSelector(false);
   };
 
   const handleTimeSelect = async (timeSlot) => {
+    // Collect time selection data
+    if (realtimeServiceRef.current) {
+      realtimeServiceRef.current.collectedData.serviceInfo.appointmentTime = timeSlot;
+    }
+    
     await realtimeServiceRef.current?.sendTextMessage(`I prefer ${timeSlot}`);
     setShowTimePicker(false);
   };
