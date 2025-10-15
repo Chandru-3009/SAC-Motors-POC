@@ -1,409 +1,752 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import AudioControls from '../components/AudioControls';
+import ConversationDisplay from '../components/ConversationDisplay';
+import ImageUploader from '../components/ImageUploader';
+import LocationSelector from '../components/LocationSelector';
+import TimeSlotPicker from '../components/TimeSlotPicker';
 import { RealtimeService } from '../services/realtimeService';
+import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 
 function Chat() {
-    const [isConnected, setIsConnected] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
-    const [messages, setMessages] = useState([]);
-    const [sessionId, setSessionId] = useState(null);
-    const [showImageUploader, setShowImageUploader] = useState(false);
-    const [showLocationSelector, setShowLocationSelector] = useState(false);
-    const [showTimePicker, setShowTimePicker] = useState(false);
-    const [locationData, setLocationData] = useState(null);
-    const [timeSlots, setTimeSlots] = useState([]);
-    const [isAISpeaking, setIsAISpeaking] = useState(false);
-    const [conversationData, setConversationData] = useState({});
-    const [language, setLanguage] = useState(() => localStorage.getItem('sac_lang') || '');
-    const [showLanguageModal, setShowLanguageModal] = useState(false);
-    const [pendingConnect, setPendingConnect] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
+  const [showImageUploader, setShowImageUploader] = useState(false);
+  const [showLocationSelector, setShowLocationSelector] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [locationData, setLocationData] = useState(null);
+  const [timeSlots, setTimeSlots] = useState([]);
+  const [isAISpeaking, setIsAISpeaking] = useState(false);
+  const [conversationData, setConversationData] = useState({});
+  const [language, setLanguage] = useState(() => localStorage.getItem('sac_lang') || '');
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [pendingConnect, setPendingConnect] = useState(false);
 
-    const realtimeServiceRef = useRef(null);
+  const realtimeServiceRef = useRef(null);
 
-    useEffect(() => {
-        // Initialize the realtime service
-        const service = new RealtimeService({
-            onMessage: handleNewMessage,
-            onConnected: () => setIsConnected(true),
-            onDisconnected: () => setIsConnected(false),
-            onAudioStart: () => setIsAISpeaking(true),
-            onAudioEnd: () => setIsAISpeaking(false),
-            onFunctionCall: handleFunctionCall,
+  useEffect(() => {
+    // Initialize the realtime service
+    const service = new RealtimeService({
+      onMessage: handleNewMessage,
+      onConnected: () => setIsConnected(true),
+      onDisconnected: () => setIsConnected(false),
+      onAudioStart: () => setIsAISpeaking(true),
+      onAudioEnd: () => setIsAISpeaking(false),
+      onFunctionCall: handleFunctionCall,
+    });
+
+    realtimeServiceRef.current = service;
+
+    return () => {
+      service.disconnect();
+    };
+  }, []);
+
+  // No auto-open language modal on load; we open it when user clicks Start
+
+  const handleNewMessage = (message) => {
+    setMessages(prev => [...prev, message]);
+  };
+
+  const handleFunctionCall = (functionName, args) => {
+    console.log('Function called:', functionName, args);
+
+    switch (functionName) {
+      case 'trigger_image_upload':
+        setShowImageUploader(true);
+        break;
+      case 'trigger_location_selector':
+        setLocationData({ cities: args.cities || ['Riyadh', 'Jeddah', 'Dammam'] });
+        setShowLocationSelector(true);
+        break;
+      case 'trigger_time_picker':
+        setTimeSlots(args.slots || ['Morning (8AM-12PM)', 'Afternoon (12PM-4PM)', 'Evening (4PM-8PM)']);
+        setShowTimePicker(true);
+        break;
+      case 'save_customer_data':
+        setConversationData(args);
+        saveDataToBackend(args);
+        break;
+      case 'generate_cost_estimation':
+        handleCostEstimation(args);
+        break;
+      case 'check_appointment_availability':
+        handleAppointmentBooking(args);
+        break;
+      default:
+        console.log('Unknown function:', functionName);
+    }
+  };
+
+  const saveDataToBackend = async (data) => {
+    if (!sessionId) return;
+
+    try {
+      const apiUrl = '/api/session/save';
+      const fallbackUrl = 'http://localhost:3000/api/session/save';
+      
+      try {
+        await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, data })
         });
+      } catch (proxyError) {
+        await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, data })
+        });
+      }
+    } catch (error) {
+      console.error('Error saving data:', error);
+    }
+  };
 
-        realtimeServiceRef.current = service;
-
-        return () => {
-            service.disconnect();
-        };
-    }, []);
-
-    // No auto-open language modal on load; we open it when user clicks Start
-
-    const handleNewMessage = (message) => {
-        setMessages(prev => [...prev, message]);
-    };
-
-    const handleFunctionCall = (functionName, args) => {
-        console.log('Function called:', functionName, args);
-
-        switch (functionName) {
-            case 'trigger_image_upload':
-                setShowImageUploader(true);
-                break;
-            case 'trigger_location_selector':
-                setLocationData({ cities: args.cities || ['Riyadh', 'Jeddah', 'Dammam'] });
-                setShowLocationSelector(true);
-                break;
-            case 'trigger_time_picker':
-                setTimeSlots(args.slots || ['Morning (8AM-12PM)', 'Afternoon (12PM-4PM)', 'Evening (4PM-8PM)']);
-                setShowTimePicker(true);
-                break;
-            case 'save_customer_data':
-                setConversationData(args);
-                saveDataToBackend(args);
-                break;
-            case 'generate_cost_estimation':
-                handleCostEstimation(args);
-                break;
-            case 'check_appointment_availability':
-                handleAppointmentBooking(args);
-                break;
-            default:
-                console.log('Unknown function:', functionName);
+  const handleCostEstimation = async (args) => {
+    console.log('Generating cost estimation:', args);
+    
+    try {
+      const apiUrl = '/api/session/cost-estimation';
+      const fallbackUrl = 'http://localhost:3000/api/session/cost-estimation';
+      
+      let response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args)
+        });
+        
+        if (!response.ok) {
+          throw new Error('Proxy failed');
         }
+      } catch (proxyError) {
+        response = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args)
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+
+      const { costEstimation } = await response.json();
+      console.log('Generated cost estimation:', costEstimation);
+
+      // Send the cost estimation back to AI so it can speak it
+      const totalCost = costEstimation.cost_estimation.total_cost;
+      const currency = costEstimation.cost_estimation.currency;
+      
+      // Send a structured response that the AI can speak naturally
+      await realtimeServiceRef.current?.sendTextMessage(
+        `FUNCTION_RESULT: Cost estimation completed successfully. Total cost: ${totalCost} ${currency}. Breakdown: Parts ${costEstimation.cost_estimation.parts_cost} ${currency}, Labor ${costEstimation.cost_estimation.labor_cost} ${currency}, Paint ${costEstimation.cost_estimation.paint_cost} ${currency}. Please present this cost estimation to the user in a friendly way and continue with the next question about driveability.`
+      );
+    } catch (error) {
+      console.error('Error generating cost estimation:', error);
+      
+      // Fallback to a simple estimate
+      await realtimeServiceRef.current?.sendTextMessage(
+        `FUNCTION_RESULT: Cost estimation: Approximately 1,500-2,500 SAR based on damage description. Please present this to the user and continue with the next question about driveability.`
+      );
+    }
+  };
+
+  const handleAppointmentBooking = async (args) => {
+    const { date, day, timeSlot, city, contactMethod } = args;
+    
+    // Sample time slot data for validation
+    const availabilityData = {
+      'Monday': ['Morning', 'Afternoon', 'Evening'],
+      'Tuesday': ['Morning', 'Afternoon', 'Evening'],
+      'Wednesday': ['Morning', 'Afternoon', 'Evening'],
+      'Thursday': ['Morning', 'Afternoon', 'Evening'],
+      'Friday': ['Morning', 'Afternoon', 'Evening'],
+      'Saturday': ['Morning', 'Afternoon'], // No Evening slots
+      'Sunday': [] // Closed
     };
 
-    const saveDataToBackend = async (data) => {
-        if (!sessionId) return;
+    const availableCities = ['Riyadh', 'Jeddah', 'Dammam'];
+    const availableTimeSlots = ['Morning', 'Afternoon', 'Evening'];
+    const availableContactMethods = ['WhatsApp', 'Email'];
 
-        try {
-            const apiUrl = '/api/session/save';
-            const fallbackUrl = 'http://localhost:3000/api/session/save';
+    // Validate the appointment request
+    let responseMessage = '';
+    let isAvailable = true;
 
-            try {
-                await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, data })
-                });
-            } catch (proxyError) {
-                await fetch(fallbackUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, data })
-                });
-            }
-        } catch (error) {
-            console.error('Error saving data:', error);
+    // Check if day is valid and available
+    if (!availabilityData[day]) {
+      isAvailable = false;
+      responseMessage = `Sorry, "${day}" is not a valid day. We're open Monday through Saturday. Please provide a different date.`;
+    } else if (availabilityData[day].length === 0) {
+      isAvailable = false;
+      responseMessage = `Sorry, we're closed on ${day}. We're open Monday through Saturday. Please choose a different date.`;
+    } else if (!availabilityData[day].includes(timeSlot)) {
+      isAvailable = false;
+      const availableSlots = availabilityData[day].join(' or ');
+      responseMessage = `Sorry, ${timeSlot} slots aren't available on ${day}. We have ${availableSlots} available on ${date}. Which would you prefer?`;
+    } else if (!availableCities.includes(city)) {
+      isAvailable = false;
+      responseMessage = `Sorry, we don't have a branch in ${city}. We have branches in Riyadh, Jeddah, and Dammam. Which city works for you?`;
+    } else if (!availableContactMethods.includes(contactMethod)) {
+      isAvailable = false;
+      responseMessage = `Sorry, ${contactMethod} isn't available. We can contact you via WhatsApp or Email. Which would you prefer?`;
+    }
+
+    if (isAvailable) {
+      // Appointment is available - confirm it with full date
+      const timeSlotDetails = {
+        'Morning': '8:00 AM - 12:00 PM',
+        'Afternoon': '12:00 PM - 4:00 PM',
+        'Evening': '4:00 PM - 8:00 PM'
+      };
+
+      responseMessage = `Perfect! I've booked your appointment for ${date}, ${timeSlot} (${timeSlotDetails[timeSlot]}) at our ${city} branch. We'll contact you via ${contactMethod} with the confirmation details. Shukran for choosing SAC Motors!`;
+      
+      // Save the appointment data
+      const appointmentData = {
+        appointmentDate: date,
+        appointmentDay: day,
+        appointmentTime: `${timeSlot} (${timeSlotDetails[timeSlot]})`,
+        city: city,
+        contactMethod: contactMethod
+      };
+      
+      setConversationData(prev => ({ ...prev, ...appointmentData }));
+      await saveDataToBackend(appointmentData);
+    }
+
+    // Send the response back to the AI
+    await realtimeServiceRef.current?.sendTextMessage(responseMessage);
+  };
+
+  const handleConnect = async () => {
+    try {
+      // Decide solely based on persistent storage so clearing storage forces dialog
+      const storedLang = localStorage.getItem('sac_lang');
+      if (!storedLang) {
+        setPendingConnect(true);
+        setShowLanguageModal(true);
+        return;
+      }
+      // Try proxy first, fallback to direct connection
+      const apiUrl = '/api/session/create';
+      const fallbackUrl = 'http://localhost:3000/api/session/create';
+      
+      let response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: storedLang || 'en' })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Proxy failed, trying direct connection');
         }
-    };
+      } catch (proxyError) {
+        console.log('Proxy connection failed, trying direct connection...');
+        response = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: storedLang || 'en' })
+        });
+      }
 
-    const handleCostEstimation = async (args) => {
-        console.log('Generating cost estimation:', args);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server responded with ${response.status}: ${errorText}`);
+      }
 
-        try {
-            const apiUrl = '/api/session/cost-estimation';
-            const fallbackUrl = 'http://localhost:3000/api/session/cost-estimation';
+      const { sessionId: newSessionId, clientSecret } = await response.json();
+      setSessionId(newSessionId);
 
-            let response;
-            try {
-                response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(args)
-                });
+      // Clear previous conversation messages for fresh start
+      setMessages([]);
+      setConversationData({});
+      setShowImageUploader(false);
+      setShowLocationSelector(false);
+      setShowTimePicker(false);
+      setLocationData(null);
+      setTimeSlots([]);
 
-                if (!response.ok) {
-                    throw new Error('Proxy failed');
-                }
-            } catch (proxyError) {
-                response = await fetch(fallbackUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(args)
-                });
-            }
+      await realtimeServiceRef.current.connect(clientSecret);
+      setIsConnected(true);
 
-            if (!response.ok) {
-                throw new Error(`Server responded with ${response.status}`);
-            }
+      // Set language attribute but keep UI in LTR direction
+      document.documentElement.lang = storedLang || 'en';
 
-            const { costEstimation } = await response.json();
-            console.log('Generated cost estimation:', costEstimation);
+      // AI will automatically greet and start the conversation via voice and text
+      console.log('🤖 Connected - AI will greet automatically...');
+    } catch (error) {
+      console.error('Connection error:', error);
+      let errorMessage = 'Failed to connect. ';
+      
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        errorMessage += 'Please ensure the backend server is running on http://localhost:3000\n\n';
+        errorMessage += 'Run: cd backend && npm run dev';
+      } else if (error.message.includes('OPENAI_API_KEY')) {
+        errorMessage += 'Please check your OpenAI API key in backend/.env file';
+      } else {
+        errorMessage += error.message;
+      }
+      
+      alert(errorMessage);
+    }
+  };
 
-            // Send the cost estimation back to AI so it can speak it
-            const totalCost = costEstimation.cost_estimation.total_cost;
-            const currency = costEstimation.cost_estimation.currency;
+  const handleDisconnect = () => {
+    realtimeServiceRef.current?.disconnect();
+    setIsConnected(false);
+    setIsRecording(false);
+    
+    // Clear all conversation state on disconnect
+    setMessages([]);
+    setConversationData({});
+    setShowImageUploader(false);
+    setShowLocationSelector(false);
+    setShowTimePicker(false);
+    setLocationData(null);
+    setTimeSlots([]);
 
-            // Send a structured response that the AI can speak naturally
-            await realtimeServiceRef.current?.sendTextMessage(
-                `FUNCTION_RESULT: Cost estimation completed successfully. Total cost: ${totalCost} ${currency}. Breakdown: Parts ${costEstimation.cost_estimation.parts_cost} ${currency}, Labor ${costEstimation.cost_estimation.labor_cost} ${currency}, Paint ${costEstimation.cost_estimation.paint_cost} ${currency}. Please present this cost estimation to the user in a friendly way and continue with the next question about driveability.`
-            );
-        } catch (error) {
-            console.error('Error generating cost estimation:', error);
+    // Reset language so user selects again on next start
+    localStorage.removeItem('sac_lang');
+    setLanguage('');
+    setShowLanguageModal(false);
+    setPendingConnect(false);
+    document.documentElement.lang = 'en';
+  };
 
-            // Fallback to a simple estimate
-            await realtimeServiceRef.current?.sendTextMessage(
-                `FUNCTION_RESULT: Cost estimation: Approximately 1,500-2,500 SAR based on damage description. Please present this to the user and continue with the next question about driveability.`
-            );
+  const toggleRecording = () => {
+    if (isRecording) {
+      realtimeServiceRef.current?.stopRecording();
+    } else {
+      realtimeServiceRef.current?.startRecording();
+    }
+    setIsRecording(!isRecording);
+  };
+
+  const toggleMute = () => {
+    realtimeServiceRef.current?.toggleMute();
+    setIsMuted(!isMuted);
+  };
+
+
+  const handleImageUpload = async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const apiUrl = '/api/upload/damage-image';
+      const fallbackUrl = 'http://localhost:3000/api/upload/damage-image';
+      
+      let response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error('Proxy failed');
         }
-    };
+      } catch (proxyError) {
+        response = await fetch(fallbackUrl, {
+          method: 'POST',
+          body: formData
+        });
+      }
 
-    const handleAppointmentBooking = async (args) => {
-        const { date, day, timeSlot, city, contactMethod } = args;
+      const { imageUrl } = await response.json();
+      
+      const imageMessage = {
+        role: 'user',
+        content: `[Image uploaded: ${file.name}]`,
+        imageUrl: `http://localhost:3000${imageUrl}`,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, imageMessage]);
 
-        // Sample time slot data for validation
-        const availabilityData = {
-            'Monday': ['Morning', 'Afternoon', 'Evening'],
-            'Tuesday': ['Morning', 'Afternoon', 'Evening'],
-            'Wednesday': ['Morning', 'Afternoon', 'Evening'],
-            'Thursday': ['Morning', 'Afternoon', 'Evening'],
-            'Friday': ['Morning', 'Afternoon', 'Evening'],
-            'Saturday': ['Morning', 'Afternoon'], // No Evening slots
-            'Sunday': [] // Closed
-        };
+      // Collect image upload data
+      if (realtimeServiceRef.current) {
+        realtimeServiceRef.current.collectedData.damageInfo.imageUrl = `http://localhost:3000${imageUrl}`;
+        realtimeServiceRef.current.collectedData.damageInfo.imageFileName = file.name;
+        realtimeServiceRef.current.collectUserData(imageMessage, true);
+      }
 
-        const availableCities = ['Riyadh', 'Jeddah', 'Dammam'];
-        const availableTimeSlots = ['Morning', 'Afternoon', 'Evening'];
-        const availableContactMethods = ['WhatsApp', 'Email'];
+      setShowImageUploader(false);
+      
+      // Notify AI that image was uploaded
+      await realtimeServiceRef.current?.sendTextMessage('I have uploaded the damage photo.');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Failed to upload image. Please try again.');
+    }
+  };
 
-        // Validate the appointment request
-        let responseMessage = '';
-        let isAvailable = true;
+  const handleLocationSelect = async (city, branch) => {
+    // Collect location selection data
+    if (realtimeServiceRef.current) {
+      realtimeServiceRef.current.collectedData.serviceInfo.preferredCity = city;
+      realtimeServiceRef.current.collectedData.serviceInfo.preferredBranch = branch;
+    }
+    
+    await realtimeServiceRef.current?.sendTextMessage(`I choose ${city} - ${branch}`);
+    setShowLocationSelector(false);
+  };
 
-        // Check if day is valid and available
-        if (!availabilityData[day]) {
-            isAvailable = false;
-            responseMessage = `Sorry, "${day}" is not a valid day. We're open Monday through Saturday. Please provide a different date.`;
-        } else if (availabilityData[day].length === 0) {
-            isAvailable = false;
-            responseMessage = `Sorry, we're closed on ${day}. We're open Monday through Saturday. Please choose a different date.`;
-        } else if (!availabilityData[day].includes(timeSlot)) {
-            isAvailable = false;
-            const availableSlots = availabilityData[day].join(' or ');
-            responseMessage = `Sorry, ${timeSlot} slots aren't available on ${day}. We have ${availableSlots} available on ${date}. Which would you prefer?`;
-        } else if (!availableCities.includes(city)) {
-            isAvailable = false;
-            responseMessage = `Sorry, we don't have a branch in ${city}. We have branches in Riyadh, Jeddah, and Dammam. Which city works for you?`;
-        } else if (!availableContactMethods.includes(contactMethod)) {
-            isAvailable = false;
-            responseMessage = `Sorry, ${contactMethod} isn't available. We can contact you via WhatsApp or Email. Which would you prefer?`;
-        }
+  const handleTimeSelect = async (timeSlot) => {
+    // Collect time selection data
+    if (realtimeServiceRef.current) {
+      realtimeServiceRef.current.collectedData.serviceInfo.appointmentTime = timeSlot;
+    }
+    
+    await realtimeServiceRef.current?.sendTextMessage(`I prefer ${timeSlot}`);
+    setShowTimePicker(false);
+  };
 
-        if (isAvailable) {
-            // Appointment is available - confirm it with full date
-            const timeSlotDetails = {
-                'Morning': '8:00 AM - 12:00 PM',
-                'Afternoon': '12:00 PM - 4:00 PM',
-                'Evening': '4:00 PM - 8:00 PM'
-            };
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      {/* Language Selection Modal */}
+      {showLanguageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-gray-800 mb-2 tracking-tight">Choose your language</h3>
+            <p className="text-sm text-gray-600 mb-6">اختر لغتك المفضلة</p>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => {
+                  localStorage.setItem('sac_lang', 'en');
+                  setLanguage('en');
+                  setShowLanguageModal(false);
+                  if (pendingConnect) {
+                    setPendingConnect(false);
+                    // proceed to connect now that language is set
+                    handleConnect();
+                  }
+                }}
+                className="bg-gray-900 text-white rounded-xl py-3 font-semibold hover:bg-gray-800 transition-all"
+              >
+                English
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.setItem('sac_lang', 'ar');
+                  setLanguage('ar');
+                  setShowLanguageModal(false);
+                  if (pendingConnect) {
+                    setPendingConnect(false);
+                    handleConnect();
+                  }
+                }}
+                className="bg-gradient-to-r from-sac-red to-red-600 text-white rounded-xl py-3 font-semibold hover:from-red-600 hover:to-red-700 transition-all"
+              >
+                العربية
+              </button>
+            </div>
+            <div className="text-xs text-gray-500 mt-4">You can change later by clearing browser storage.</div>
+          </div>
+        </div>
+      )}
+      {/* Header */}
+      <header className="bg-gradient-to-r from-gray-900 to-gray-800 backdrop-blur-sm border-b border-gray-700/50 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <img 
+                src="https://sac-motor.com/wp-content/uploads/2021/02/SacLogo-white.png" 
+                alt="SAC Motors" 
+                className="h-10 w-auto"
+              />
+              <div className="border-l border-gray-500 pl-4">
+                <h1 className="text-lg font-bold text-white tracking-tight">AI Service Assistant</h1>
+                <p className="text-sm text-gray-300">Powered by Fahad</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              {isConnected ? (
+                <>
+                  <span className="flex items-center text-emerald-400 text-sm font-medium">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full mr-2 animate-pulse"></span>
+                    Connected
+                  </span>
+                  <button
+                    onClick={handleDisconnect}
+                    className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold py-2 px-4 rounded-xl transition-all duration-200 hover:shadow-md"
+                  >
+                    Disconnect
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleConnect}
+                  className="bg-gradient-to-r from-sac-red to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2.5 px-6 rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25 transform hover:-translate-y-0.5"
+                >
+                  Start Conversation
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
 
-            responseMessage = `Perfect! I've booked your appointment for ${date}, ${timeSlot} (${timeSlotDetails[timeSlot]}) at our ${city} branch. We'll contact you via ${contactMethod} with the confirmation details. Shukran for choosing SAC Motors!`;
+      {/* Main Content */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {!isConnected ? (
+          <div className="text-center py-20">
+            {/* Hero Section */}
+            <div className="max-w-5xl mx-auto">
+              {/* Floating Microphone Icon */}
+              <div className="relative mb-12">
+                <div className="w-32 h-32 bg-gradient-to-br from-sac-red to-red-600 rounded-full flex items-center justify-center mx-auto shadow-2xl shadow-red-500/30 transform hover:scale-105 transition-all duration-300 hover:shadow-red-500/40">
+                  <Mic className="w-16 h-16 text-white" />
+                </div>
+                <div className="absolute inset-0 w-32 h-32 bg-gradient-to-br from-sac-red/20 to-red-600/20 rounded-full mx-auto animate-pulse"></div>
+              </div>
 
-            // Save the appointment data
-            const appointmentData = {
-                appointmentDate: date,
-                appointmentDay: day,
-                appointmentTime: `${timeSlot} (${timeSlotDetails[timeSlot]})`,
-                city: city,
-                contactMethod: contactMethod
-            };
+              {/* Main Content Card */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100/50 p-12 mb-12">
+                <h2 className="text-5xl font-bold text-gray-800 mb-6 tracking-tight">
+                  Specialized Collisions Repair
+                </h2>
+                <p className="text-xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed">
+                  Meet <span className="text-sac-red font-bold">Fahad</span>, your personal AI service engineer. 
+                  Get instant vehicle assessment, accurate repair estimation, and hassle-free appointment booking 
+                  with voice and text support.
+                </p>
+                
+                {/* CTA Button */}
+                <button
+                  onClick={handleConnect}
+                  className="bg-gradient-to-r from-sac-red to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-lg px-12 py-4 rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-red-500/25 transform hover:-translate-y-1 mb-8"
+                >
+                  Start Free Estimation
+                </button>
+              </div>
 
-            setConversationData(prev => ({ ...prev, ...appointmentData }));
-            await saveDataToBackend(appointmentData);
-        }
+              {/* Features Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 shadow-lg shadow-gray-200/30 border border-gray-100/50 hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </div>
+                  <p className="text-2xl font-bold text-sac-red mb-2">+966-118568745</p>
+                  <p className="text-sm text-gray-500 font-medium">Call Us</p>
+                </div>
+                
+                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 shadow-lg shadow-gray-200/30 border border-gray-100/50 hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300">
+                  <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-xl font-bold text-gray-800 mb-2">3 Locations</p>
+                  <p className="text-sm text-gray-500 font-medium">Riyadh, Jeddah, Dammam</p>
+                </div>
+                
+                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 shadow-lg shadow-gray-200/30 border border-gray-100/50 hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300">
+                  <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-xl font-bold text-gray-800 mb-2">All Days</p>
+                  <p className="text-sm text-gray-500 font-medium">8:00 AM - 6:00 PM</p>
+                </div>
+              </div>
 
-        // Send the response back to the AI
-        await realtimeServiceRef.current?.sendTextMessage(responseMessage);
-    };
+              {/* Gradient Separator */}
+              <div className="mt-16 mb-8">
+                <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+              </div>
 
-    const handleConnect = async () => {
-        try {
-            // Decide solely based on persistent storage so clearing storage forces dialog
-            const storedLang = localStorage.getItem('sac_lang');
-            if (!storedLang) {
-                setPendingConnect(true);
-                setShowLanguageModal(true);
-                return;
-            }
-            // Try proxy first, fallback to direct connection
-            const apiUrl = '/api/session/create';
-            const fallbackUrl = 'http://localhost:3000/api/session/create';
+              {/* Trust Indicators */}
+              <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl p-8 max-w-3xl mx-auto">
+                <h3 className="text-2xl font-bold text-gray-800 mb-6">Our Promise</h3>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-700 font-medium">Hassle Free Experience</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-700 font-medium">Quality Repairs</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-700 font-medium">9 Day Service</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="text-gray-700 font-medium">SAC Motor Warranty</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Chat Area */}
+            <div className="lg:col-span-2 space-y-4">
+              <ConversationDisplay 
+                messages={messages} 
+                isAISpeaking={isAISpeaking}
+              />
+              
+              {/* Dynamic UI Components */}
+              {showImageUploader && (
+                <ImageUploader
+                  onUpload={handleImageUpload}
+                  onCancel={() => setShowImageUploader(false)}
+                />
+              )}
+              
+              {showLocationSelector && locationData && (
+                <LocationSelector
+                  cities={locationData.cities}
+                  onSelect={handleLocationSelect}
+                  onCancel={() => setShowLocationSelector(false)}
+                />
+              )}
+              
+              {showTimePicker && (
+                <TimeSlotPicker
+                  slots={timeSlots}
+                  onSelect={handleTimeSelect}
+                  onCancel={() => setShowTimePicker(false)}
+                />
+              )}
 
-            let response;
-            try {
-                response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ language: storedLang || 'en' })
-                });
+            </div>
 
-                if (!response.ok) {
-                    throw new Error('Proxy failed, trying direct connection');
-                }
-            } catch (proxyError) {
-                console.log('Proxy connection failed, trying direct connection...');
-                response = await fetch(fallbackUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ language: storedLang || 'en' })
-                });
-            }
+            {/* Sidebar - Audio Controls & Info */}
+            <div className="space-y-4">
+              <AudioControls
+                isRecording={isRecording}
+                isMuted={isMuted}
+                isConnected={isConnected}
+                onToggleRecording={toggleRecording}
+                onToggleMute={toggleMute}
+                isAISpeaking={isAISpeaking}
+              />
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Server responded with ${response.status}: ${errorText}`);
-            }
+              {/* Conversation Data Summary */}
+              {Object.keys(conversationData).length > 0 && (
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg shadow-gray-200/30 border border-gray-100/50 p-6">
+                  <h3 className="text-lg font-bold mb-4 text-gray-800 border-b border-gray-200 pb-3">
+                    Collected Information
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    {conversationData.fullName && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-600">Name:</span> 
+                        <span className="text-gray-800 font-medium">{conversationData.fullName}</span>
+                      </div>
+                    )}
+                    {conversationData.mobileNumber && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-600">Mobile:</span> 
+                        <span className="text-gray-800 font-medium">{conversationData.mobileNumber}</span>
+                      </div>
+                    )}
+                    {conversationData.emailAddress && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-600">Email:</span> 
+                        <span className="text-gray-800 font-medium">{conversationData.emailAddress}</span>
+                      </div>
+                    )}
+                    {conversationData.vehicleMake && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-600">Vehicle:</span> 
+                        <span className="text-gray-800 font-medium">{conversationData.vehicleMake} {conversationData.vehicleModel} ({conversationData.vehicleYear})</span>
+                      </div>
+                    )}
+                    {conversationData.preferredCity && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-600">Location:</span> 
+                        <span className="text-gray-800 font-medium">{conversationData.preferredCity}</span>
+                      </div>
+                    )}
+                    {conversationData.appointmentTime && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-600">Appointment:</span> 
+                        <span className="text-gray-800 font-medium">{conversationData.appointmentTime}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
-            const { sessionId: newSessionId, clientSecret } = await response.json();
-            setSessionId(newSessionId);
-
-            // Clear previous conversation messages for fresh start
-            setMessages([]);
-            setConversationData({});
-            setShowImageUploader(false);
-            setShowLocationSelector(false);
-            setShowTimePicker(false);
-            setLocationData(null);
-            setTimeSlots([]);
-
-            await realtimeServiceRef.current.connect(clientSecret);
-            setIsConnected(true);
-
-            // Set language attribute but keep UI in LTR direction
-            document.documentElement.lang = storedLang || 'en';
-
-            // AI will automatically greet and start the conversation via voice and text
-            console.log('🤖 Connected - AI will greet automatically...');
-        } catch (error) {
-            console.error('Connection error:', error);
-            let errorMessage = 'Failed to connect. ';
-
-            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                errorMessage += 'Please ensure the backend server is running on http://localhost:3000\n\n';
-                errorMessage += 'Run: cd backend && npm run dev';
-            } else if (error.message.includes('OPENAI_API_KEY')) {
-                errorMessage += 'Please check your OpenAI API key in backend/.env file';
-            } else {
-                errorMessage += error.message;
-            }
-
-            alert(errorMessage);
-        }
-    };
-
-    const handleDisconnect = () => {
-        realtimeServiceRef.current?.disconnect();
-        setIsConnected(false);
-        setIsRecording(false);
-
-        // Clear all conversation state on disconnect
-        setMessages([]);
-        setConversationData({});
-        setShowImageUploader(false);
-        setShowLocationSelector(false);
-        setShowTimePicker(false);
-        setLocationData(null);
-        setTimeSlots([]);
-
-        // Reset language so user selects again on next start
-        localStorage.removeItem('sac_lang');
-        setLanguage('');
-        setShowLanguageModal(false);
-        setPendingConnect(false);
-        document.documentElement.lang = 'en';
-    };
-
-    const toggleRecording = () => {
-        if (isRecording) {
-            realtimeServiceRef.current?.stopRecording();
-        } else {
-            realtimeServiceRef.current?.startRecording();
-        }
-        setIsRecording(!isRecording);
-    };
-
-    const toggleMute = () => {
-        realtimeServiceRef.current?.toggleMute();
-        setIsMuted(!isMuted);
-    };
-
-
-    const handleImageUpload = async (file) => {
-        const formData = new FormData();
-        formData.append('image', file);
-
-        try {
-            const apiUrl = '/api/upload/damage-image';
-            const fallbackUrl = 'http://localhost:3000/api/upload/damage-image';
-
-            let response;
-            try {
-                response = await fetch(apiUrl, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    throw new Error('Proxy failed');
-                }
-            } catch (proxyError) {
-                response = await fetch(fallbackUrl, {
-                    method: 'POST',
-                    body: formData
-                });
-            }
-
-            const { imageUrl } = await response.json();
-
-            const imageMessage = {
-                role: 'user',
-                content: `[Image uploaded: ${file.name}]`,
-                imageUrl: `http://localhost:3000${imageUrl}`,
-                timestamp: new Date()
-            };
-
-            setMessages(prev => [...prev, imageMessage]);
-
-            // Collect image upload data
-            if (realtimeServiceRef.current) {
-                realtimeServiceRef.current.collectedData.damageInfo.imageUrl = `http://localhost:3000${imageUrl}`;
-                realtimeServiceRef.current.collectedData.damageInfo.imageFileName = file.name;
-                realtimeServiceRef.current.collectUserData(imageMessage, true);
-            }
-
-            setShowImageUploader(false);
-
-            // Notify AI that image was uploaded
-            await realtimeServiceRef.current?.sendTextMessage('I have uploaded the damage photo.');
-        } catch (error) {
-            console.error('Error uploading image:', error);
-            alert('Failed to upload image. Please try again.');
-        }
-    };
-
-    const handleLocationSelect = async (city, branch) => {
-        // Collect location selection data
-        if (realtimeServiceRef.current) {
-            realtimeServiceRef.current.collectedData.serviceInfo.preferredCity = city;
-            realtimeServiceRef.current.collectedData.serviceInfo.preferredBranch = branch;
-        }
-
-        await realtimeServiceRef.current?.sendTextMessage(`I choose ${city} - ${branch}`);
-        setShowLocationSelector(false);
-    };
-
-    const handleTimeSelect = async (timeSlot) => {
-        // Collect time selection data
-        if (realtimeServiceRef.current) {
-            realtimeServiceRef.current.collectedData.serviceInfo.appointmentTime = timeSlot;
-        }
-
-        await realtimeServiceRef.current?.sendTextMessage(`I prefer ${timeSlot}`);
-        setShowTimePicker(false);
-    };
-
+              {/* Info Card */}
+              <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-xl shadow-gray-900/20 border border-gray-700/50 p-6">
+                <h3 className="text-lg font-bold mb-4 text-white border-b border-gray-600 pb-3">
+                  Our Promise
+                </h3>
+                <ul className="text-sm text-gray-300 space-y-3">
+                  <li className="flex items-center space-x-3">
+                    <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span>Hassle Free Experience</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span>Quality Repairs</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span>9 Day Service (vs. 21 industry avg.)</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span>SAC Motor Warranty</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
 
 export default Chat;
