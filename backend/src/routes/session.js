@@ -1,6 +1,5 @@
 import express from 'express';
 import { createSession, saveSessionData, getSessionData, getSessions } from '../services/openaiService.js';
-import { createSession, saveSessionData, getSessionData } from '../services/openaiService.js';
 import { generateCostEstimation } from '../services/costEstimationService.js';
 
 const router = express.Router();
