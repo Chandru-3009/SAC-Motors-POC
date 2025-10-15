@@ -8,9 +8,12 @@ export default function ConversationDisplay({ messages, isAISpeaking }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Filter messages to only show AI assistant messages
+  const aiMessages = messages.filter(message => message.role === 'assistant');
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [aiMessages]);
 
   return (
     <div className="card h-[500px] flex flex-col bg-gradient-chat">
@@ -37,7 +40,7 @@ export default function ConversationDisplay({ messages, isAISpeaking }) {
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-        {messages.length === 0 ? (
+        {aiMessages.length === 0 ? (
           <div className="text-center text-gray-500 mt-20">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-sac-red to-red-600 flex items-center justify-center shadow-lg">
               <Car className="w-8 h-8 text-white" />
@@ -46,37 +49,14 @@ export default function ConversationDisplay({ messages, isAISpeaking }) {
             <p className="text-sm mt-2">Click "Start Conversation" to begin your service consultation</p>
           </div>
         ) : (
-          messages.map((message, index) => (
-            <div
-              key={index}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`flex items-start space-x-2 max-w-[80%] ${
-                  message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
-                }`}
-              >
-                <div
-                  className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                    message.role === 'user'
-                      ? 'bg-gray-300'
-                      : 'bg-gradient-to-br from-sac-red to-red-600 shadow-lg'
-                  }`}
-                >
-                  {message.role === 'user' ? (
-                    <User className="w-5 h-5 text-gray-700" />
-                  ) : (
-                    <Wrench className="w-5 h-5 text-white" />
-                  )}
+          aiMessages.map((message, index) => (
+            <div key={index} className="flex justify-start">
+              <div className="flex items-start space-x-2 max-w-[80%]">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-sac-red to-red-600 shadow-lg">
+                  <Wrench className="w-5 h-5 text-white" />
                 </div>
 
-                <div
-                  className={`rounded-lg px-4 py-3 message-shadow message-bubble ${
-                    message.role === 'user'
-                      ? 'bg-white border border-gray-200 text-gray-900'
-                      : 'bg-sac-navy text-white'
-                  }`}
-                >
+                <div className="rounded-lg px-4 py-3 message-shadow message-bubble bg-sac-navy text-white">
                   <div className="text-sm whitespace-pre-wrap leading-relaxed">
                     {message.content.includes('**') || message.content.includes('•') ? (
                       <div 
